@@ -22,7 +22,7 @@
 </head>
 <body>
 
-    <h2>小5漢字 50問ノック</h2>
+    <h2>漢字 20問</h2>
 
     <div id="setupScreen" class="setup-screen">
         <div class="card">
@@ -122,7 +122,7 @@ async function loadData() {
             : masterData.filter(item => item.l === selectedLevel);
 
         // シャッフルして最大50問取り出す
-        currentQuestions = filtered.sort(() => Math.random() - 0.5).slice(0, 50);
+        currentQuestions = filtered.sort(() => Math.random() - 0.5).slice(0, 20);
 
         if (currentQuestions.length === 0) {
             alert("このレベルの問題がありません。");
@@ -171,6 +171,7 @@ async function loadData() {
 </script>
 </body>
 </html>
+
 
 
 
