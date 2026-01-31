@@ -63,9 +63,8 @@
         window.speechSynthesis.speak(uttr);
     }
 
-    async function loadData() {
+async function loadData() {
         try {
-            // CORSエラー回避のためにプロキシを使用（必要に応じて）
             const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(spreadsheetUrl);
             const response = await fetch(proxyUrl);
             const csvText = await response.text();
@@ -73,31 +72,55 @@
             const rows = csvText.split(/\r?\n/).slice(1);
             const levels = new Set();
 
-            masterData = rows.map(row => {
+            masterData = rows.map((row, index) => {
+                // カンマで分割（引用符を考慮）
                 const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                const level = columns[3] ? columns[3].replace(/"/g, '').trim() : 'なし';
-                if (level) levels.add(level);
+                
+                // 4番目の列（D列）をレベルとして取得
+                let levelValue = columns[3] ? columns[3].replace(/"/g, '').trim() : "";
+                
+                // もしD列が空なら「未設定」にする
+                if (!levelValue) levelValue = "未設定";
+                
+                levels.add(levelValue);
+
                 return {
                     k: columns[0] ? columns[0].replace(/"/g, '') : '',
                     r: columns[1] ? columns[1].replace(/"/g, '') : '',
                     s: columns[2] ? columns[2].replace(/"/g, '') : '',
-                    l: level
+                    l: levelValue
                 };
             }).filter(item => item.k.trim() !== "");
 
-            // レベル選択肢を自動生成
+            // デバッグ用：見つかったレベルの数をコンソールに出す
+            console.log("見つかったレベル:", Array.from(levels));
+
+            // レベル選択肢を生成
             const select = document.getElementById('levelSelect');
+            // 一旦クリア（「すべて」以外を消す）
+            select.innerHTML = '<option value="すべて">すべてのレベル</option>';
+            
             levels.forEach(l => {
-                const opt = document.createElement('option');
-                opt.value = l;
-                opt.textContent = "レベル: " + l;
-                select.appendChild(opt);
+                if (l !== "未設定") {
+                    const opt = document.createElement('option');
+                    opt.value = l;
+                    opt.textContent = "レベル: " + l;
+                    select.appendChild(opt);
+                }
             });
+            
+            // 「未設定」があれば最後に追加
+            if (levels.has("未設定")) {
+                const opt = document.createElement('option');
+                opt.value = "未設定";
+                opt.textContent = "レベル設定なしの問題";
+                select.appendChild(opt);
+            }
 
             document.getElementById('startBtn').disabled = false;
             document.getElementById('startBtn').textContent = "学習スタート";
         } catch (e) {
-            alert("データの読み込みに失敗しました。");
+            document.getElementById('sentence').textContent = "読み込みエラー。D列にレベルがあるか確認してください。";
         }
     }
 
@@ -160,5 +183,6 @@
 </script>
 </body>
 </html>
+
 
 
