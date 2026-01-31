@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小5漢字 100問ノック</title>
+    <title>小5漢字 100問ノック（レベル別）</title>
     <style>
         body { font-family: sans-serif; text-align: center; background-color: #f0f4f8; padding: 20px; }
         .card { background: white; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 30px; max-width: 500px; margin: 20px auto; min-height: 300px; }
@@ -11,41 +11,48 @@
         .reading { color: #3498db; font-weight: bold; margin-top: 10px; }
         .sentence { font-size: 22px; margin: 20px 0; min-height: 60px; line-height: 1.5; color: #333; }
         .answer { font-size: 50px; color: #e74c3c; font-weight: bold; margin: 20px 0; min-height: 75px; }
-        button { background-color: #2ecc71; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px #27ae60; }
+        button { background-color: #2ecc71; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px #27ae60; margin-bottom: 10px; }
         button:disabled { background-color: #ccc; box-shadow: none; cursor: not-allowed; }
         .next-btn { background-color: #3498db; box-shadow: 0 4px #2980b9; }
         .hidden { display: none; }
-        #debug { font-size: 10px; color: #ccc; margin-top: 20px; }
+        select { padding: 10px; font-size: 16px; border-radius: 10px; margin-bottom: 20px; width: 80%; }
+        .setup-screen { display: block; }
+        .game-screen { display: none; }
     </style>
 </head>
 <body>
 
-    <h2>小5漢字 100問ノック</h2>
-    
-    <div class="card">
-        <div id="progress" class="progress"></div>
-        <div id="reading" class="reading"></div>
-        <div id="sentence" class="sentence">データを読み込んでいます...</div>
-        <div id="answer" class="answer hidden"></div>
-        <button id="actionBtn" disabled>お待ちください</button>
+    <h2>小5漢字 50問ノック</h2>
+
+    <div id="setupScreen" class="setup-screen">
+        <div class="card">
+            <p>レベルを選んでスタートしてください</p>
+            <select id="levelSelect">
+                <option value="すべて">すべてのレベル</option>
+            </select>
+            <button id="startBtn" disabled>読み込み中...</button>
+        </div>
     </div>
-    <div id="debug"></div>
+
+    <div id="gameScreen" class="game-screen">
+        <div class="card">
+            <div id="progress" class="progress"></div>
+            <div id="reading" class="reading"></div>
+            <div id="sentence" class="sentence"></div>
+            <div id="answer" class="answer hidden"></div>
+            <button id="actionBtn">答えを見る</button>
+            <button style="background-color: #95a5a6; box-shadow: 0 4px #7f8c8d;" onclick="location.reload()">レベルを選び直す</button>
+        </div>
+    </div>
 
 <script>
     // ★ ここをご自身のスプレッドシートURLに書き換えてください
-    const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS3XlyuTf9zWYkdgFmoOR2mOGeB9SRZp3Q6tYXOqvDwTaVx-CLHCj7qmvdls3zbM4fe7DeQztYxyW0M/pub?gid=0&single=true&output=csv';
+    const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS3XIyuTf9zWYkdgFmoOR2mOGeB9SRZp3Q6tYXOqvDwTaVx-CLHCj7qmvdls3zbM4fe7DeQztYxyW0M/pub?gid=0&single=true&output=csv';
 
     let masterData = [];
     let currentQuestions = [];
     let currentIndex = 0;
     let showingAnswer = false;
-
-    const progressEl = document.getElementById('progress');
-    const readingEl = document.getElementById('reading');
-    const sentenceEl = document.getElementById('sentence');
-    const answerEl = document.getElementById('answer');
-    const btn = document.getElementById('actionBtn');
-    const debugEl = document.getElementById('debug');
 
     // 読み上げ関数
     function speak(text) {
@@ -58,64 +65,91 @@
 
     async function loadData() {
         try {
-            // GitHub上では直接 fetch しても CORS エラーになりにくいです
-            const response = await fetch(spreadsheetUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
+            // CORSエラー回避のためにプロキシを使用（必要に応じて）
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(spreadsheetUrl);
+            const response = await fetch(proxyUrl);
             const csvText = await response.text();
             
             const rows = csvText.split(/\r?\n/).slice(1);
+            const levels = new Set();
+
             masterData = rows.map(row => {
                 const columns = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                const level = columns[3] ? columns[3].replace(/"/g, '').trim() : 'なし';
+                if (level) levels.add(level);
                 return {
                     k: columns[0] ? columns[0].replace(/"/g, '') : '',
                     r: columns[1] ? columns[1].replace(/"/g, '') : '',
-                    s: columns[2] ? columns[2].replace(/"/g, '') : ''
+                    s: columns[2] ? columns[2].replace(/"/g, '') : '',
+                    l: level
                 };
             }).filter(item => item.k.trim() !== "");
 
-            if (masterData.length === 0) throw new Error('No data found');
-            initApp();
+            // レベル選択肢を自動生成
+            const select = document.getElementById('levelSelect');
+            levels.forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l;
+                opt.textContent = "レベル: " + l;
+                select.appendChild(opt);
+            });
+
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').textContent = "学習スタート";
         } catch (e) {
-            sentenceEl.textContent = "読み込みエラーが発生しました。";
-            debugEl.textContent = e.toString();
-            console.error(e);
+            alert("データの読み込みに失敗しました。");
         }
     }
 
-    function initApp() {
-        currentQuestions = [...masterData].sort(() => Math.random() - 0.5);
+    // ゲーム開始
+    document.getElementById('startBtn').onclick = function() {
+        const selectedLevel = document.getElementById('levelSelect').value;
+        
+        // レベルでフィルタリング
+        let filtered = (selectedLevel === "すべて") 
+            ? masterData 
+            : masterData.filter(item => item.l === selectedLevel);
+
+        // シャッフルして最大50問取り出す
+        currentQuestions = filtered.sort(() => Math.random() - 0.5).slice(0, 50);
+
+        if (currentQuestions.length === 0) {
+            alert("このレベルの問題がありません。");
+            return;
+        }
+
+        document.getElementById('setupScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
         currentIndex = 0;
-        btn.disabled = false;
         showQuestion();
-    }
+    };
 
     function showQuestion() {
         const q = currentQuestions[currentIndex];
-        progressEl.textContent = (currentIndex + 1) + " / " + currentQuestions.length;
-        readingEl.textContent = "よみ： " + q.r;
-        sentenceEl.textContent = q.s;
-        answerEl.textContent = q.k;
-        answerEl.classList.add('hidden');
-        btn.textContent = "答えを見る";
-        btn.className = "";
+        document.getElementById('progress').textContent = (currentIndex + 1) + " / " + currentQuestions.length;
+        document.getElementById('reading').textContent = "よみ： " + q.r;
+        document.getElementById('sentence').textContent = q.s;
+        document.getElementById('answer').textContent = q.k;
+        document.getElementById('answer').classList.add('hidden');
+        document.getElementById('actionBtn').textContent = "答えを見る";
+        document.getElementById('actionBtn').className = "";
         showingAnswer = false;
     }
 
-    btn.onclick = function() {
+    document.getElementById('actionBtn').onclick = function() {
         if (!showingAnswer) {
-            answerEl.classList.remove('hidden');
-            btn.textContent = "次の問題へ";
-            btn.className = "next-btn";
+            document.getElementById('answer').classList.remove('hidden');
+            this.textContent = "次の問題へ";
+            this.className = "next-btn";
             showingAnswer = true;
-
+            
             const q = currentQuestions[currentIndex];
-            const textToSpeak = q.s.replace('（', '').replace('）', '');
-            speak(textToSpeak);
+            speak(q.s.replace('（', '').replace('）', ''));
         } else {
             currentIndex++;
             if (currentIndex >= currentQuestions.length) {
-                alert("全問終了しました！");
-                initApp();
+                alert("本日の50問（または選択したレベルの全問題）が終了しました！");
+                location.reload();
             } else {
                 showQuestion();
             }
@@ -126,4 +160,3 @@
 </script>
 </body>
 </html>
-
