@@ -15,6 +15,7 @@
         button:disabled { background-color: #ccc; box-shadow: none; cursor: not-allowed; }
         .next-btn { background-color: #3498db; box-shadow: 0 4px #2980b9; }
         .hidden { display: none; }
+        #debug { font-size: 10px; color: #ccc; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -24,10 +25,11 @@
     <div class="card">
         <div id="progress" class="progress"></div>
         <div id="reading" class="reading"></div>
-        <div id="sentence" class="sentence">読み込み中...</div>
+        <div id="sentence" class="sentence">データを読み込んでいます...</div>
         <div id="answer" class="answer hidden"></div>
         <button id="actionBtn" disabled>お待ちください</button>
     </div>
+    <div id="debug"></div>
 
 <script>
     // ★ ここをご自身のスプレッドシートURLに書き換えてください
@@ -43,23 +45,22 @@
     const sentenceEl = document.getElementById('sentence');
     const answerEl = document.getElementById('answer');
     const btn = document.getElementById('actionBtn');
+    const debugEl = document.getElementById('debug');
 
-    // --- 読み上げ機能（新しく追加した部分） ---
+    // 読み上げ関数
     function speak(text) {
-        speechSynthesis.cancel(); // 前の音声を止める
-        const uttr = new SpeechSynthesisUtterance();
-        uttr.text = text;
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
         uttr.lang = 'ja-JP';
-        uttr.rate = 1.0; 
-        speechSynthesis.speak(uttr);
+        window.speechSynthesis.speak(uttr);
     }
 
     async function loadData() {
         try {
-            // パソコンでのテストとGitHub両方で動くようにプロキシ経由で読み込み
-            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(spreadsheetUrl);
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('読み込みエラー');
+            // GitHub上では直接 fetch しても CORS エラーになりにくいです
+            const response = await fetch(spreadsheetUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
             const csvText = await response.text();
             
             const rows = csvText.split(/\r?\n/).slice(1);
@@ -72,9 +73,11 @@
                 };
             }).filter(item => item.k.trim() !== "");
 
+            if (masterData.length === 0) throw new Error('No data found');
             initApp();
         } catch (e) {
-            sentenceEl.textContent = "エラー: データを読み込めませんでした。";
+            sentenceEl.textContent = "読み込みエラーが発生しました。";
+            debugEl.textContent = e.toString();
             console.error(e);
         }
     }
@@ -98,22 +101,17 @@
         showingAnswer = false;
     }
 
-    // ボタンを押した時の動き
     btn.onclick = function() {
         if (!showingAnswer) {
-            // 1. 答えを表示
             answerEl.classList.remove('hidden');
             btn.textContent = "次の問題へ";
             btn.className = "next-btn";
             showingAnswer = true;
 
-            // 2. 読み上げを実行（カッコを消して読む）
             const q = currentQuestions[currentIndex];
             const textToSpeak = q.s.replace('（', '').replace('）', '');
             speak(textToSpeak);
-
         } else {
-            // 次の問題へ
             currentIndex++;
             if (currentIndex >= currentQuestions.length) {
                 alert("全問終了しました！");
